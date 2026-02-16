@@ -2,71 +2,47 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * ❌ SMELL: Duplicate Code
- * La lógica de descuento aquí es IDÉNTICA a la de Factura.
- * Son el mismo conocimiento de negocio: "cuánto descuento aplica".
+ * ✅ CarritoCompras refactorizado: sin duplicación de impuestos ni descuentos.
  *
- * Si el negocio decide cambiar los umbrales de descuento ($100k → $80k),
- * hay que buscarlo y cambiarlo en DOS clases distintas.
- * Y si hay una tercera clase que también lo calcula... en TRES.
+ * ANTES: CarritoCompras tenía su propia copia de la lógica de tasas
+ * y su propia copia de la lógica de descuentos.
+ *
+ * AHORA: Reutiliza las mismas reglas que usa Factura.
+ * - La coherencia entre el precio que ves en el carrito
+ * y el que aparece en la factura está GARANTIZADA por diseño.
+ * - No puede haber un bug donde el carrito muestra 10% de descuento
+ * pero la factura aplica 5%, porque ambos llaman el mismo método.
  */
 public class CarritoCompras {
 
-    private List<Producto> productos;
-    private List<Integer> cantidades;
+    private List<LineaFactura> lineas;
+    private PoliticaDescuento politicaDescuento;
 
-    public CarritoCompras() {
-        this.productos = new ArrayList<>();
-        this.cantidades = new ArrayList<>();
+    public CarritoCompras(PoliticaDescuento politicaDescuento) {
+        this.lineas = new ArrayList<>();
+        this.politicaDescuento = politicaDescuento;
     }
 
     public void agregar(Producto producto, int cantidad) {
-        productos.add(producto);
-        cantidades.add(cantidad);
+        lineas.add(new LineaFactura(producto, cantidad));
     }
 
     public double calcularSubtotal() {
-        double subtotal = 0;
-        for (int i = 0; i < productos.size(); i++) {
-            subtotal += productos.get(i).getPrecio() * cantidades.get(i);
-        }
-        return subtotal;
+        return lineas.stream()
+                .mapToDouble(LineaFactura::getSubtotal)
+                .sum();
     }
 
-    // ❌ DUPLICATE CODE: Exactamente la misma lógica que Factura.calcularDescuento()
-    // Mismo conocimiento de negocio, dos representaciones
-    public double calcularDescuentoPreview() {
-        double subtotal = calcularSubtotal();
-        if (subtotal > 100000) {
-            return subtotal * 0.10;
-        }
-        if (subtotal > 50000) {
-            return subtotal * 0.05;
-        }
-        return 0;
-    }
-
-    // ❌ DUPLICATE CODE: Mismas tasas de impuesto que en Factura y ReporteVentas
+    // ✅ Sin duplicación: delega en Producto exactamente como lo hace Factura
     public double estimarImpuestos() {
-        double totalImpuesto = 0;
-        for (int i = 0; i < productos.size(); i++) {
-            Producto p = productos.get(i);
-            double precioLinea = p.getPrecio() * cantidades.get(i);
-            double tasa;
+        return lineas.stream()
+                .mapToDouble(LineaFactura::getImpuesto)
+                .sum();
+    }
 
-            if (p.getCategoria().equals("ALIMENTO")) {
-                tasa = 0.05;
-            } else if (p.getCategoria().equals("BEBIDA")) {
-                tasa = 0.08;
-            } else if (p.getCategoria().equals("LIMPIEZA")) {
-                tasa = 0.19;
-            } else {
-                tasa = 0.19;
-            }
-
-            totalImpuesto += precioLinea * tasa;
-        }
-        return totalImpuesto;
+    // ✅ Sin duplicación: misma PoliticaDescuento que usa Factura
+    public double calcularDescuentoPreview() {
+        return politicaDescuento.calcularDescuento(calcularSubtotal());
     }
 
     public double calcularTotalEstimado() {
